@@ -749,7 +749,7 @@ class Recognizer(AudioSource):
         assert isinstance(language, str), "`language` must be a string"
 
         access_token, expire_time = getattr(self, "bing_cached_access_token", None), getattr(self, "bing_cached_access_token_expiry", None)
-        allow_caching = True
+        allow_caching = False
         try:
             from time import monotonic # we need monotonic time to avoid being affected by system clock changes, but this is only available in Python 3.3+
         except ImportError:
@@ -760,13 +760,12 @@ class Recognizer(AudioSource):
                 allow_caching = False # don't allow caching, since monotonic time isn't available
         if expire_time is None or monotonic() > expire_time: # caching not enabled, first credential request, or the access token from the previous one expired
             # get an access token using OAuth
-            credential_url = "https://oxford-speech.cloudapp.net/token/issueToken"
-            credential_request = Request(credential_url, data = urlencode({
-              "grant_type": "client_credentials",
-              "client_id": "python",
-              "client_secret": key,
-              "scope": "https://speech.platform.bing.com"
-            }).encode("utf-8"))
+            credential_url = "https://api.cognitive.microsoft.com/sts/v1.0/issueToken"
+            credential_request = Request(credential_url, data = {}, headers={
+                "Ocp-Apim-Subscription-Key": key, 
+                "Content-Type": "application/json",
+                "Content-Length": 0
+            })
             if allow_caching:
                 start_time = monotonic()
             try:
@@ -776,7 +775,7 @@ class Recognizer(AudioSource):
             except URLError as e:
                 raise RequestError("recognition connection failed: {0}".format(e.reason))
             credential_text = credential_response.read().decode("utf-8")
-            credentials = json.loads(credential_text)
+            credentials = {"access_token": credential_text, "expires_in": 1}
             access_token, expiry_seconds = credentials["access_token"], float(credentials["expires_in"])
 
             if allow_caching:
